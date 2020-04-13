@@ -1,0 +1,648 @@
+---
+title: "PGRP/CEGIS COVID-19 Monitoring Dashboard"
+knit: (function(input_file, encoding) {
+  out_dir <- 'docs';
+  rmarkdown::render(input_file,
+ encoding=encoding,
+ output_file=file.path(dirname(input_file), out_dir, 'index.html'))})
+output: flexdashboard::flex_dashboard
+runtime: shiny
+---
+
+```{r global, include=FALSE}
+rm(list = ls())
+
+library(flexdashboard)
+library(tidyverse)
+library(ggplot2)
+library(foreign)
+library(purrr)
+library(shiny)
+library(dplyr)
+library(plotly)
+library(sf)
+library(DT)
+
+file_name   <- "C:/Users/sriva/Desktop/TSMap/DelhiDistricts.shp"
+
+nc          <- st_read(file_name)
+nc          <- nc[c("layer", "path", "geometry")]
+nc$district <- nc$layer
+
+db <- read.csv2("C:/Users/sriva/Dropbox/PGRP Delhi HFM/Data/Data/Clean/Covid/Dashboard Input/surveydata.csv", 
+                header = TRUE, sep = ",", fileEncoding="UTF-8-BOM")
+
+for (i in 2:20) {
+  db[, i] <- as.numeric(as.character(db[, i]))
+}
+db$district    <- as.character(db$district)
+
+addCI          <- function(var) {
+  mean         <- paste0(var, "_mean")
+  se           <- paste0(var, "_se")
+  
+  labels       <- paste0(round(db[[mean]], digits = 1), 
+                         "% +/- ", 
+                         round(db[[se]], digits = 1), "%")
+  return(labels)
+}
+
+nc <- merge(nc, db, by = c("district"), all.x = TRUE)
+```
+
+
+Food security
+====================================
+
+Column {data-width=350}
+------------------------------------
+
+### Households where anyone is missing meals 
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$missmeal_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### PDS beneficiaries receiving additional entitlement
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$pdsben_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### Population using food shelters
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$shelter_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### All districts
+```{r}
+db$missmeal_lbl <- addCI(var = "missmeal")
+db$pdsben_lbl   <- addCI(var = "pdsben")
+db$shelter_lbl  <- addCI(var = "shelter")
+
+
+DT::datatable(db[which(db$district != "Delhi"), 
+                 c("district", "missmeal_lbl", "pdsben_lbl", "shelter_lbl")],
+              rownames = FALSE, 
+              colnames = c('District', 
+                           'Households where anyone is missing meals',
+                           'PDS beneficiaries receiving additional entitlement',
+                           'Population using food shelters'),
+              options = list(pageLength = 15)
+)
+```
+
+Column {data-width=650, .tabset}
+------------------------------------
+
+### Households where anyone is missing meals (%)
+```{r, echo=FALSE, message=FALSE}
+p_1 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~missmeal_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, missmeal_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_1, fillFrame = TRUE)
+```
+
+### PDS beneficiaries receiving additional entitlement (%)
+```{r, echo=FALSE, message=FALSE}
+p_2 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~pdsben_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, pdsben_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_2, fillFrame = TRUE)
+```
+
+### Population using food shelters (%)
+```{r, echo=FALSE, message=FALSE}
+p_3 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~shelter_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, shelter_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_3, fillFrame = TRUE)
+```
+
+
+Economic indicators
+====================================
+
+Column {data-width=350}
+------------------------------------
+
+### Population that lost wages in the past week
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$lost_wage_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(0, 10), warning = c(11, 40), danger = c(41, 100)
+))
+```
+
+### Population that believes they are financially secure for one month
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$financial_security_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### Reported stock availability of basic food items in the market
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$mkt_stock_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### All districts
+```{r}
+db$lost_wage_lbl <- addCI(var = "lost_wage")
+db$financial_security_lbl   <- addCI(var = "financial_security")
+db$mkt_stock_lbl  <- addCI(var = "mkt_stock")
+
+
+DT::datatable(db[which(db$district != "Delhi"), 
+                 c("district", "lost_wage_lbl", "financial_security_lbl", "mkt_stock_lbl")],
+              rownames = FALSE, 
+              colnames = c('District', 
+                           'Population that lost wages in the past week',
+                           'Population that believes they are financially secure for one month',
+                           'Reported stock availability of basic food items in the market'),
+              options = list(pageLength = 15)
+)
+```
+
+Column {data-width=650, .tabset}
+------------------------------------
+
+### Population that lost wages in the past week
+```{r, echo=FALSE, message=FALSE}
+p_1 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~lost_wage_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, lost_wage_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_1, fillFrame = TRUE)
+```
+
+### Population that believes they are financially secure for one month
+```{r, echo=FALSE, message=FALSE}
+p_2 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~financial_security_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, financial_security_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_2, fillFrame = TRUE)
+```
+
+### Reported stock availability of basic food items in the market
+```{r, echo=FALSE, message=FALSE}
+p_3 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~mkt_stock_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, mkt_stock_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_3, fillFrame = TRUE)
+```
+
+
+
+Symptoms and awareness
+====================================
+
+Column {data-width=350}
+------------------------------------
+
+### Population showing symptoms
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$symptoms_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### Population aware of public health directives
+```{r}
+gauge(formatC(db[which(db$district == "Delhi"),]$aware_mean, 
+              digits = 2, format = "f"), 
+      min = 0, max = 100, symbol = '%', 
+      gaugeSectors(
+      success = c(90, 100), warning = c(40, 89), danger = c(0, 39)
+))
+```
+
+### All districts
+```{r}
+db$symptoms_lbl <- addCI(var = "symptoms")
+db$aware_lbl   <- addCI(var = "aware")
+
+DT::datatable(db[which(db$district != "Delhi"), 
+                 c("district", "symptoms_lbl", "aware_lbl")],
+              rownames = FALSE, 
+              colnames = c('District', 
+                           'Population showing symptoms',
+                           'Population aware of public health directives'),
+              options = list(pageLength = 15))
+```
+
+Column {data-width=650, .tabset}
+------------------------------------
+
+### Population showing symptoms
+```{r, echo=FALSE, message=FALSE}
+p_1 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~symptoms_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, symptoms_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_1, fillFrame = TRUE)
+```
+
+### Population aware of public health directives
+```{r, echo=FALSE, message=FALSE}
+p_2 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~aware_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, aware_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_2, fillFrame = TRUE)
+```
+
+### % using food shelters
+```{r, echo=FALSE, message=FALSE}
+p_3 <- plot_ly(nc) %>% 
+  add_sf(
+    color = ~shelter_mean, 
+    split = ~district, 
+    span = I(1),
+    text = ~paste(district, shelter_mean),
+    hoverinfo = "text",
+    hoveron = "fills"
+  ) %>%
+  layout(showlegend = FALSE) %>%
+  colorbar(title = " ")
+config(p_3, fillFrame = TRUE)
+```
+
+
+
+
+Time trends (food security)
+====================================
+### Households where anyone is missing meals 
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = missmeal_mean, group = district, 
+                 text = paste(district, " ", missmeal_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = missmeal_mean - 1.96*missmeal_se, 
+                                       ymax = missmeal_mean + 1.96*missmeal_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = missmeal_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = missmeal_mean - 1.96*missmeal_se, 
+                                       ymax = missmeal_mean + 1.96*missmeal_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### PDS beneficiaries receiving additional entitlement
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = pdsben_mean, group = district, 
+                 text = paste(district, " ", pdsben_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = pdsben_mean - 1.96*pdsben_se, 
+                                       ymax = pdsben_mean + 1.96*pdsben_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = pdsben_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = pdsben_mean - 1.96*pdsben_se, 
+                                       ymax = pdsben_mean + 1.96*pdsben_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### Population using food shelters
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = shelter_mean, group = district, 
+                 text = paste(district, " ", shelter_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = shelter_mean - 1.96*shelter_se, 
+                                       ymax = shelter_mean + 1.96*shelter_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = shelter_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = shelter_mean - 1.96*shelter_se, 
+                                       ymax = shelter_mean + 1.96*shelter_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+
+Time trends (economic indicators)
+====================================
+### Population that lost wages in the past week
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = lost_wage_mean, group = district, 
+                 text = paste(district, " ", lost_wage_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = lost_wage_mean - 1.96*lost_wage_se, 
+                                       ymax = lost_wage_mean + 1.96*lost_wage_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = lost_wage_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = lost_wage_mean - 1.96*lost_wage_se, 
+                                       ymax = lost_wage_mean + 1.96*lost_wage_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### Population that believes they are financially secure for one month
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = financial_security_mean, group = district, 
+                 text = paste(district, " ", financial_security_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = financial_security_mean - 1.96*financial_security_se, 
+                                       ymax = financial_security_mean + 1.96*financial_security_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = financial_security_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = financial_security_mean - 1.96*financial_security_se, 
+                                       ymax = financial_security_mean + 1.96*financial_security_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### Reported stock availability of basic food items in the market
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = mkt_stock_mean, group = district, 
+                 text = paste(district, " ", mkt_stock_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = mkt_stock_mean - 1.96*mkt_stock_se, 
+                                       ymax = mkt_stock_mean + 1.96*mkt_stock_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = mkt_stock_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = mkt_stock_mean - 1.96*mkt_stock_se, 
+                                       ymax = mkt_stock_mean + 1.96*mkt_stock_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### Reported price for a basic food basket
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = foodbasket_mean, group = district, 
+                 text = paste(district, " ", foodbasket_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = foodbasket_mean - 1.96*foodbasket_se, 
+                                       ymax = foodbasket_mean + 1.96*foodbasket_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = foodbasket_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = foodbasket_mean - 1.96*foodbasket_se, 
+                                       ymax = foodbasket_mean + 1.96*foodbasket_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+
+Time trends (symptoms and awareness)
+====================================
+### Population showing symptoms 
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = symptoms_mean, group = district, 
+                 text = paste(district, " ", symptoms_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = symptoms_mean - 1.96*symptoms_se, 
+                                       ymax = symptoms_mean + 1.96*symptoms_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = symptoms_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = symptoms_mean - 1.96*symptoms_se, 
+                                       ymax = symptoms_mean + 1.96*symptoms_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+### Population aware of public health directives
+```{r, echo=FALSE, message=FALSE}
+t1 <- ggplot(data = db[which(db$district != "Delhi"),], 
+             aes(x = week, y = aware_mean, group = district, 
+                 text = paste(district, " ", aware_mean, "%", sep = ""))) + 
+      geom_point(size = 3, colour = "grey")
+t1 <- t1 + geom_errorbar(data = db[which(db$district != "Delhi"),],
+                         mapping = aes(ymin = aware_mean - 1.96*aware_se, 
+                                       ymax = aware_mean + 1.96*aware_se), 
+                         width = .2, colour = "grey", 
+                         position=position_dodge(0.01))
+t1 <- t1 + geom_point(data = db[which(db$district == "Delhi"),], 
+                      aes(x = week, y = aware_mean, group = district),
+                      size = 5, colour = "black") 
+t1 <- t1 + geom_errorbar(data = db[which(db$district == "Delhi"),],
+                         mapping = aes(ymin = aware_mean - 1.96*aware_se, 
+                                       ymax = aware_mean + 1.96*aware_se), 
+                         width = .1, colour = "black",
+                         position=position_dodge(0.01))
+t1 <- t1 + theme_classic() + xlim(0, 8) + ylim(0, 100)
+t1 <- t1 + scale_x_discrete(limits = c("1", "2", "3", "4", "5", "6", "7", "8"),
+                            labels = c("April 10-17", "April 18-25", "April 26-May 2", 
+                                       "May 3-10", "May 11-18", "May 19-26",
+                                       "May 27-June 2", "June 3-10")) +
+       xlab(" ") + ylab(" ")
+ggplotly(t1, tooltip = "text")
+````
+
+
+About
+====================================
+
+Column {data-width = 100}
+------------------------------------
+### Completed surveys as of April 13
+```{r}
+renderValueBox({
+  articles <- computeArticles(input$types)
+  valueBox(122, 
+           icon = "fa-pencil")
+})
+```
+
+Column {data-width = 900}
+------------------------------------
+[Draft]
+
+The indicators in this dashboard are estimated from the ongoing high frequency monitoring (HFM) project being conducted by the Payments and Governance Research Program at J-PAL with the Dialogue and Development Commission of the Delhi Government. 
+
+The estimates are based on phone surveys with a population representative of people who have used a Mohalla Clinic in the last 8 months, and should not be extrapolated to the broader population of Delhi. 
+
+A description of the indicators in this dashboard is provided below:
+
+[...]
+
+Please reach out to [...] for any questions.
