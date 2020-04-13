@@ -560,7 +560,7 @@ ggplotly(t1, tooltip = "text")
 ````
 
 
-Time trends (symptoms and awareness)
+Time trends (symptoms & awareness)
 ====================================
 ### Population showing symptoms 
 ```{r, echo=FALSE, message=FALSE}
